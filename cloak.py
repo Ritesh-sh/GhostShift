@@ -74,13 +74,32 @@ while True:
                     # Play sound safely
                     play_magic_sound()
 
-    # Segmentation
+    # Segmentation with improved edge detection
     seg_result = segmentation.process(rgb)
     mask = seg_result.segmentation_mask
 
-    # Smooth mask to avoid patches
-    mask = cv2.GaussianBlur(mask, (15, 15), 0)
-    condition = mask > 0.6  # stronger threshold
+    # Improved mask processing for better edge detection
+    # Apply morphological operations to clean up the mask
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    # Adaptive threshold based on lighting conditions
+    mask_mean = np.mean(mask)
+    threshold = max(0.4, min(0.8, mask_mean * 0.8))  # Adaptive threshold
+    condition = mask > threshold
+
+    # Apply edge refinement using Canny edge detection on the mask
+    mask_uint8 = (mask * 255).astype(np.uint8)
+    edges = cv2.Canny(mask_uint8, 50, 150)
+    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+
+    # Refine mask by removing noise and smoothing edges
+    refined_mask = cv2.GaussianBlur(mask, (7, 7), 0)  # Smaller blur for sharper edges
+    condition = refined_mask > threshold
+
+    # Additional smoothing for final mask
+    condition = cv2.medianBlur(condition.astype(np.uint8), 5).astype(bool)
 
     # Normal view
     output_frame = frame.copy()
@@ -93,8 +112,18 @@ while True:
             if fade_direction == -1:
                 alpha = 1 - alpha
 
-            # Feather edges: blend mask instead of harsh cut
-            output_frame = cv2.addWeighted(replaced, alpha, frame, 1 - alpha, 0)
+            # Improved feathering: use distance transform for better edge blending
+            mask_binary = condition.astype(np.uint8) * 255
+            dist_transform = cv2.distanceTransform(mask_binary, cv2.DIST_L2, 5)
+            dist_transform = cv2.normalize(dist_transform, None, 0, 1, cv2.NORM_MINMAX)
+
+            # Create soft edges using distance transform
+            soft_mask = np.where(dist_transform < 0.1, alpha * dist_transform * 10, alpha)
+            soft_mask = np.clip(soft_mask, 0, 1)
+
+            # Apply soft mask for smoother blending using numpy array operations
+            soft_mask_3d = soft_mask[..., None]  # Add channel dimension for broadcasting
+            output_frame = (soft_mask_3d * replaced + (1 - soft_mask_3d) * frame).astype(np.uint8)
 
             fade_progress += 1
             if fade_progress > fade_frames:
