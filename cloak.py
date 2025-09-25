@@ -74,25 +74,34 @@ while True:
                     # Play sound safely
                     play_magic_sound()
 
-    # Segmentation with improved edge detection
+    # Segmentation with improved edge detection and expanded coverage
     seg_result = segmentation.process(rgb)
     mask = seg_result.segmentation_mask
 
-    # Improved mask processing for better edge detection
-    # Apply morphological operations to clean up the mask
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    # Improved mask processing for better edge detection and expanded coverage
+    # Apply morphological operations to clean up and expand the mask
+    kernel_small = np.ones((3, 3), np.uint8)
+    kernel_large = np.ones((7, 7), np.uint8)  # Larger kernel for expansion
 
-    # Adaptive threshold based on lighting conditions
+    # Initial cleanup
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_small, iterations=1)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_small, iterations=1)
+
+    # Expand the mask to cover more body area
+    mask = cv2.dilate(mask, kernel_large, iterations=2)  # Dilate to expand coverage
+
+    # Additional smoothing after expansion
+    mask = cv2.GaussianBlur(mask, (5, 5), 0)
+
+    # Lower threshold to include more area around the person
     mask_mean = np.mean(mask)
-    threshold = max(0.4, min(0.8, mask_mean * 0.8))  # Adaptive threshold
+    threshold = max(0.2, min(0.6, mask_mean * 0.6))  # Lower threshold for more coverage
     condition = mask > threshold
 
     # Apply edge refinement using Canny edge detection on the mask
     mask_uint8 = (mask * 255).astype(np.uint8)
     edges = cv2.Canny(mask_uint8, 50, 150)
-    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+    edges_dilated = cv2.dilate(edges, kernel_small, iterations=1)
 
     # Refine mask by removing noise and smoothing edges
     refined_mask = cv2.GaussianBlur(mask, (7, 7), 0)  # Smaller blur for sharper edges
