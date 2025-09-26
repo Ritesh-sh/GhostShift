@@ -8,12 +8,12 @@ from playsound import playsound
 
 # Function to play sound in background thread (safe)
 def play_magic_sound():
-    if os.path.exists("magic_whoosh.wav"):  # check if file exists
+    if os.path.exists("ramayan_notification.mp3"):  # check if file exists
         threading.Thread(
-            target=lambda: playsound("magic_whoosh.wav"), daemon=True
+            target=lambda: playsound("ramayan_notification.mp3"), daemon=True
         ).start()
     else:
-        print("⚠️ Sound file 'magic_whoosh.wav' not found. Skipping sound.")
+        print("⚠️ Sound file 'ramayan_notification.mp3' not found. Skipping sound.")
 
 # Initialize Mediapipe
 mp_hands = mp.solutions.hands
